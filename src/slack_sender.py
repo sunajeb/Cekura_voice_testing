@@ -73,7 +73,7 @@ class SlackSender:
         """
         blocks = []
 
-        # Title block
+        # Title block only (no summary)
         blocks.append({
             "type": "header",
             "text": {
@@ -81,16 +81,6 @@ class SlackSender:
                 "text": title
             }
         })
-
-        # Summary block (if provided)
-        if summary:
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": summary
-                }
-            })
 
         # Add Block Kit section fields format
         blockkit_blocks = self._create_blockkit_fields(markdown_table)
@@ -470,22 +460,6 @@ class SlackSender:
         else:
             agent_links = [None] * len(agent_names)
 
-        # Add links section at the top
-        if any(agent_links):
-            links_text = "*📊 Detailed Reports*\n"
-            for name, link in zip(agent_names, agent_links):
-                if link:
-                    links_text += f"• <{link}|{name}>\n"
-
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": links_text.strip()
-                }
-            })
-            blocks.append({"type": "divider"})
-
         # Create fields for each metric (2 fields per row max for readability)
         # We'll do: Metric name + values on one row
         for metric_idx in range(2, len(headers)):
@@ -520,6 +494,22 @@ class SlackSender:
             blocks.append({
                 "type": "section",
                 "fields": fields
+            })
+
+        # Add links section at the bottom
+        if any(agent_links):
+            blocks.append({"type": "divider"})
+            links_text = "*📊 Detailed Reports*\n"
+            for name, link in zip(agent_names, agent_links):
+                if link:
+                    links_text += f"• <{link}|{name}>\n"
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": links_text.strip()
+                }
             })
 
         return blocks
