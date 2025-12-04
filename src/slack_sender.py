@@ -100,7 +100,7 @@ class SlackSender:
 
     def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
         """
-        Convert markdown table to Slack blocks with clickable links.
+        Convert markdown table to compact Slack blocks with clickable links.
 
         Args:
             markdown_table: Markdown formatted table
@@ -118,19 +118,6 @@ class SlackSender:
         header_line = lines[0]
         headers = [h.strip() for h in header_line.split("|") if h.strip()]
 
-        # Add header as section
-        header_text = " | ".join(f"*{h}*" for h in headers)
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": header_text
-            }
-        })
-
-        # Add divider
-        blocks.append({"type": "divider"})
-
         # Parse data rows
         for i, line in enumerate(lines):
             if i <= 1:  # Skip header and separator
@@ -141,33 +128,82 @@ class SlackSender:
             if len(cells) != len(headers):
                 continue
 
-            # Build row text with proper Slack markdown for links
-            row_parts = []
-            for j, (header, cell) in enumerate(zip(headers, cells)):
-                # Convert markdown link [Link](url) to Slack link <url|Link>
-                if cell.startswith("[") and "](" in cell:
-                    # Extract link text and URL
-                    link_text = cell[cell.find("[")+1:cell.find("]")]
-                    url = cell[cell.find("(")+1:cell.find(")")]
-                    slack_link = f"<{url}|{link_text}>"
-                    row_parts.append(f"*{header}:* {slack_link}")
-                else:
-                    row_parts.append(f"*{header}:* {cell}")
+            # Build a compact card for each agent
+            agent_name = cells[0]  # Company-Client
 
-            # Create section for this row
+            # Extract link
+            link_cell = cells[1]
+            if link_cell.startswith("[") and "](" in link_cell:
+                url = link_cell[link_cell.find("(")+1:link_cell.find(")")]
+                clickable_link = f"<{url}|📊 View Details>"
+            else:
+                clickable_link = "No link"
+
+            # Create agent header with link
             blocks.append({
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "\n".join(row_parts)
+                    "text": f"*{agent_name}*  |  {clickable_link}"
                 }
             })
 
-            # Add divider between rows
-            if i < len(lines) - 1:
-                blocks.append({"type": "divider"})
+            # Create compact metrics display (2 columns)
+            metrics_text = self._format_metrics_compact(headers, cells)
+
+            blocks.append({
+                "type": "section",
+                "fields": metrics_text
+            })
+
+            # Add divider between agents
+            blocks.append({"type": "divider"})
 
         return blocks
+
+    def _format_metrics_compact(self, headers: List[str], cells: List[str]) -> List[Dict[str, str]]:
+        """
+        Format metrics in a compact 2-column layout.
+
+        Args:
+            headers: List of header names
+            cells: List of cell values
+
+        Returns:
+            List of field dicts for Slack
+        """
+        fields = []
+
+        # Skip Company-Client (index 0) and Link (index 1)
+        for i in range(2, len(headers)):
+            header = headers[i]
+            value = cells[i]
+
+            # Add emoji indicators for key metrics
+            emoji = self._get_metric_emoji(header)
+
+            fields.append({
+                "type": "mrkdwn",
+                "text": f"{emoji} *{header}*\n`{value}`"
+            })
+
+        return fields
+
+    def _get_metric_emoji(self, metric_name: str) -> str:
+        """Get emoji for metric visualization."""
+        emoji_map = {
+            "Latency (ms)": "⚡",
+            "AI interrupting user": "🔴",
+            "User interrupting AI": "🔵",
+            "Detect Silence in Conversation": "🔇",
+            "Stop Time after User Interruption (ms)": "⏱️",
+            "Voice Tone + Clarity": "🎙️",
+            "Appropriate Call Termination by Main Agent": "✅",
+            "Words Per Minute": "💬",
+            "Relevancy": "🎯",
+            "Average Pitch (Hz)": "🎵"
+        }
+        return emoji_map.get(metric_name, "📊")
 
     def send_error_notification(
         self,
