@@ -100,7 +100,7 @@ class SlackSender:
 
     def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
         """
-        Convert markdown table to compact Slack blocks with clickable links.
+        Convert markdown table to comparison view with agents as columns.
 
         Args:
             markdown_table: Markdown formatted table
@@ -114,80 +114,79 @@ class SlackSender:
         if len(lines) < 3:
             return blocks
 
-        # Parse header
+        # Parse header and all data rows
         header_line = lines[0]
         headers = [h.strip() for h in header_line.split("|") if h.strip()]
 
-        # Parse data rows
+        # Parse all agent rows
+        agents_data = []
         for i, line in enumerate(lines):
             if i <= 1:  # Skip header and separator
                 continue
-
             cells = [c.strip() for c in line.split("|") if c.strip()]
+            if len(cells) == len(headers):
+                agents_data.append(cells)
 
-            if len(cells) != len(headers):
-                continue
+        if not agents_data:
+            return blocks
 
-            # Build a compact card for each agent
-            agent_name = cells[0]  # Company-Client
+        # Create agent header row with links
+        agent_names = []
+        for row in agents_data:
+            agent_name = row[0]  # Company-Client
+            link_cell = row[1]  # Link
 
-            # Extract link
-            link_cell = cells[1]
             if link_cell.startswith("[") and "](" in link_cell:
                 url = link_cell[link_cell.find("(")+1:link_cell.find(")")]
-                clickable_link = f"<{url}|📊 View Details>"
+                agent_names.append(f"<{url}|*{agent_name}*>")
             else:
-                clickable_link = "No link"
+                agent_names.append(f"*{agent_name}*")
 
-            # Create agent header with link
+        # Add agent names header
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": " | ".join(agent_names)
+            }
+        })
+        blocks.append({"type": "divider"})
+
+        # Now display each metric as a row with values from all agents
+        # Skip Company-Client (0) and Link (1)
+        for metric_idx in range(2, len(headers)):
+            metric_name = headers[metric_idx]
+            emoji = self._get_metric_emoji(metric_name)
+
+            # Collect values for this metric from all agents
+            fields = []
+
+            # Add metric name as first field (spans both columns)
             blocks.append({
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*{agent_name}*  |  {clickable_link}"
+                    "text": f"{emoji} *{metric_name}*"
                 }
             })
 
-            # Create compact metrics display (2 columns)
-            metrics_text = self._format_metrics_compact(headers, cells)
+            # Add values in a grid
+            for row in agents_data:
+                value = row[metric_idx]
+                agent_name_short = row[0].split(" - ")[0]  # Get company name only
 
+                fields.append({
+                    "type": "mrkdwn",
+                    "text": f"*{agent_name_short}:* `{value}`"
+                })
+
+            # Add fields in groups (Slack supports max 10 fields)
             blocks.append({
                 "type": "section",
-                "fields": metrics_text
+                "fields": fields
             })
-
-            # Add divider between agents
-            blocks.append({"type": "divider"})
 
         return blocks
-
-    def _format_metrics_compact(self, headers: List[str], cells: List[str]) -> List[Dict[str, str]]:
-        """
-        Format metrics in a compact 2-column layout.
-
-        Args:
-            headers: List of header names
-            cells: List of cell values
-
-        Returns:
-            List of field dicts for Slack
-        """
-        fields = []
-
-        # Skip Company-Client (index 0) and Link (index 1)
-        for i in range(2, len(headers)):
-            header = headers[i]
-            value = cells[i]
-
-            # Add emoji indicators for key metrics
-            emoji = self._get_metric_emoji(header)
-
-            fields.append({
-                "type": "mrkdwn",
-                "text": f"{emoji} *{header}*\n`{value}`"
-            })
-
-        return fields
 
     def _get_metric_emoji(self, metric_name: str) -> str:
         """Get emoji for metric visualization."""
