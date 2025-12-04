@@ -22,6 +22,8 @@ class CekuraClient:
         self.api_key = api_key
         self.base_url = "https://api.cekura.ai/test_framework/v1"
         self.headers = {"X-CEKURA-API-KEY": self.api_key}
+        # V1 API for shareable links
+        self.v1_base_url = "https://api.cekura.ai/v1"
 
     def get_latest_result(self, agent_id: int, expected_run_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -250,3 +252,39 @@ class CekuraClient:
 
         logger.warning(f"Timeout waiting for result {result_id}")
         return None
+
+    def create_shareable_link(self, result_id: int, expire_at: str = "2025-12-31T23:59:59Z") -> Optional[str]:
+        """
+        Create a shareable link for a result.
+
+        Args:
+            result_id: The result ID to create a link for
+            expire_at: Expiration timestamp (default: end of 2025)
+
+        Returns:
+            Shareable URL or None if error
+        """
+        try:
+            response = requests.post(
+                f"{self.v1_base_url}/results/{result_id}/create_shareable_link_token/",
+                headers={**self.headers, "Content-Type": "application/json"},
+                json={"expire_at": expire_at},
+                timeout=REQUEST_TIMEOUT
+            )
+            response.raise_for_status()
+
+            data = response.json()
+            token = data.get("token")
+
+            if token:
+                # Construct shareable URL
+                shareable_url = f"https://app.cekura.ai/share/{token}"
+                logger.info(f"Created shareable link for result {result_id}: {shareable_url}")
+                return shareable_url
+            else:
+                logger.error(f"No token in response for result {result_id}")
+                return None
+
+        except Exception as e:
+            logger.error(f"Error creating shareable link for result {result_id}: {e}")
+            return None

@@ -132,7 +132,16 @@ def fetch_results(
             status = result.get("status")
             if status == "completed":
                 result_name = result.get("name", "")
+                result_id = result.get("id")
                 logger.info(f"Found completed result for {agent_name} (name: '{result_name}')")
+
+                # Create shareable link
+                shareable_link = cekura.create_shareable_link(result_id)
+                if shareable_link:
+                    # Store shareable link in result dict for later use
+                    result["shareable_link"] = shareable_link
+                    logger.info(f"Created shareable link for {agent_name}")
+
                 results.append((agent_name, result))
             else:
                 logger.warning(f"Latest result for {agent_name} is not completed (status: {status})")
@@ -165,7 +174,9 @@ def send_results(
     for agent_name, result in results:
         if result:
             try:
-                row = processor.create_table_row(agent_name, result)
+                # Get shareable link if available
+                shareable_link = result.get("shareable_link")
+                row = processor.create_table_row(agent_name, result, shareable_link)
                 rows.append(row)
             except Exception as e:
                 logger.error(f"Error creating row for {agent_name}: {e}")

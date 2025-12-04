@@ -84,7 +84,8 @@ class DataProcessor:
     @staticmethod
     def create_table_row(
         agent_name: str,
-        result: Dict[str, Any]
+        result: Dict[str, Any],
+        shareable_link: Optional[str] = None
     ) -> Dict[str, str]:
         """
         Create a table row for a single agent result.
@@ -92,12 +93,18 @@ class DataProcessor:
         Args:
             agent_name: Name of the agent (e.g., "Sierra - SiriusXM")
             result: Full result dict from Cekura API
+            shareable_link: Optional shareable link URL
 
         Returns:
             Dict with formatted row data
         """
         result_id = result.get("id")
-        result_link = f"https://app.cekura.ai/results/{result_id}"
+
+        # Use shareable link if provided, otherwise fall back to regular link
+        if shareable_link:
+            result_link = shareable_link
+        else:
+            result_link = f"https://app.cekura.ai/results/{result_id}"
 
         metrics = DataProcessor.extract_metrics(result)
 

@@ -446,8 +446,45 @@ class SlackSender:
         if not agents_data:
             return blocks
 
-        # Get full agent names (Company - Client)
+        # Get full agent names (Company - Client) and extract links
         agent_names = [row[0] for row in agents_data]
+        agent_links = []
+
+        # Find Link column index
+        link_idx = None
+        for idx, header in enumerate(headers):
+            if header == "Link":
+                link_idx = idx
+                break
+
+        # Extract links for each agent
+        if link_idx is not None:
+            for row in agents_data:
+                link_text = row[link_idx]
+                # Extract URL from markdown link format: [Link](url)
+                if "(" in link_text and ")" in link_text:
+                    url = link_text.split("(")[1].split(")")[0]
+                    agent_links.append(url)
+                else:
+                    agent_links.append(None)
+        else:
+            agent_links = [None] * len(agent_names)
+
+        # Add links section at the top
+        if any(agent_links):
+            links_text = "*📊 Detailed Reports*\n"
+            for name, link in zip(agent_names, agent_links):
+                if link:
+                    links_text += f"• <{link}|{name}>\n"
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": links_text.strip()
+                }
+            })
+            blocks.append({"type": "divider"})
 
         # Create fields for each metric (2 fields per row max for readability)
         # We'll do: Metric name + values on one row
