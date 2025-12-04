@@ -158,8 +158,8 @@ class SlackSender:
         agent_names = [row[0] for row in agents_data]
 
         # Fixed column width for Slack's narrow display
-        col_width = 12  # Compact width for Slack blocks
-        metric_width = 20
+        col_width = 9  # Compact width for value columns
+        metric_width = 48  # Wide enough for full metric names
 
         # Build header row
         header = f"{'Metric':<{metric_width}}"
@@ -178,10 +178,8 @@ class SlackSender:
             metric_name = headers[metric_idx]
             emoji = self._get_metric_emoji(metric_name)
 
-            # Truncate long metric names
+            # Full metric name without truncation
             display_name = f"{emoji} {metric_name}"
-            if len(display_name) > metric_width - 1:
-                display_name = display_name[:metric_width-4] + "..."
 
             # Identify best performer for this metric
             best_idx = self._find_best_performer(agents_data, metric_idx, metric_name)
