@@ -105,7 +105,7 @@ def fetch_results(
     agents: List[Dict[str, Any]]
 ) -> List[Tuple[str, Dict[str, Any]]]:
     """
-    Fetch latest results for all agents.
+    Fetch latest results for all agents, preferring results matching today's run name.
 
     Args:
         cekura: CekuraClient instance
@@ -115,6 +115,9 @@ def fetch_results(
         List of tuples (agent_name, result_dict or None)
     """
     results = []
+    expected_run_name = get_run_name()
+
+    logger.info(f"Looking for results matching run name: {expected_run_name}")
 
     for agent in agents:
         agent_name = agent.get("name")
@@ -122,13 +125,14 @@ def fetch_results(
 
         logger.info(f"Fetching results for: {agent_name} (ID: {agent_id})")
 
-        result = cekura.get_latest_result(agent_id)
+        result = cekura.get_latest_result(agent_id, expected_run_name)
 
         if result:
             # Check if result is completed
             status = result.get("status")
             if status == "completed":
-                logger.info(f"Found completed result for {agent_name}")
+                result_name = result.get("name", "")
+                logger.info(f"Found completed result for {agent_name} (name: '{result_name}')")
                 results.append((agent_name, result))
             else:
                 logger.warning(f"Latest result for {agent_name} is not completed (status: {status})")

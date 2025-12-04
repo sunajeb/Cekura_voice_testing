@@ -9,6 +9,9 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Request timeout in seconds for Slack API
+REQUEST_TIMEOUT = 10
+
 
 class SlackSender:
     """Send formatted messages to Slack"""
@@ -40,7 +43,8 @@ class SlackSender:
             response = requests.post(
                 self.webhook_url,
                 json=slack_message,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
             logger.info("Successfully sent message to Slack")
@@ -57,7 +61,7 @@ class SlackSender:
         title: str
     ) -> Dict[str, Any]:
         """
-        Format markdown table for Slack blocks.
+        Format markdown table for Slack blocks with clickable links.
 
         Args:
             markdown_table: Markdown formatted table
@@ -88,49 +92,82 @@ class SlackSender:
                 }
             })
 
-        # Table block as preformatted text (monospace for alignment)
-        # Convert markdown table to slack-friendly format
-        table_text = self._markdown_to_slack_table(markdown_table)
-
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": f"```\n{table_text}\n```"
-            }
-        })
+        # Parse table and create formatted sections with clickable links
+        table_blocks = self._markdown_table_to_slack_blocks(markdown_table)
+        blocks.extend(table_blocks)
 
         return {"blocks": blocks}
 
-    def _markdown_to_slack_table(self, markdown_table: str) -> str:
+    def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
         """
-        Convert markdown table to a simpler format for Slack.
+        Convert markdown table to Slack blocks with clickable links.
 
         Args:
             markdown_table: Markdown formatted table
 
         Returns:
-            Simplified table string
+            List of Slack block dicts
         """
+        blocks = []
         lines = markdown_table.strip().split("\n")
 
-        # Extract headers and remove separator row
         if len(lines) < 3:
-            return markdown_table
+            return blocks
 
-        # Process each line to create aligned columns
-        processed_lines = []
+        # Parse header
+        header_line = lines[0]
+        headers = [h.strip() for h in header_line.split("|") if h.strip()]
+
+        # Add header as section
+        header_text = " | ".join(f"*{h}*" for h in headers)
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": header_text
+            }
+        })
+
+        # Add divider
+        blocks.append({"type": "divider"})
+
+        # Parse data rows
         for i, line in enumerate(lines):
-            if i == 1:  # Skip separator row
+            if i <= 1:  # Skip header and separator
                 continue
 
-            # Clean up the line
-            clean_line = line.strip().strip("|").strip()
-            # Replace multiple spaces with single space for better Slack rendering
-            clean_line = " ".join(clean_line.split())
-            processed_lines.append(clean_line)
+            cells = [c.strip() for c in line.split("|") if c.strip()]
 
-        return "\n".join(processed_lines)
+            if len(cells) != len(headers):
+                continue
+
+            # Build row text with proper Slack markdown for links
+            row_parts = []
+            for j, (header, cell) in enumerate(zip(headers, cells)):
+                # Convert markdown link [Link](url) to Slack link <url|Link>
+                if cell.startswith("[") and "](" in cell:
+                    # Extract link text and URL
+                    link_text = cell[cell.find("[")+1:cell.find("]")]
+                    url = cell[cell.find("(")+1:cell.find(")")]
+                    slack_link = f"<{url}|{link_text}>"
+                    row_parts.append(f"*{header}:* {slack_link}")
+                else:
+                    row_parts.append(f"*{header}:* {cell}")
+
+            # Create section for this row
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "\n".join(row_parts)
+                }
+            })
+
+            # Add divider between rows
+            if i < len(lines) - 1:
+                blocks.append({"type": "divider"})
+
+        return blocks
 
     def send_error_notification(
         self,
@@ -174,7 +211,8 @@ class SlackSender:
             response = requests.post(
                 self.webhook_url,
                 json=message,
-                headers={"Content-Type": "application/json"}
+                headers={"Content-Type": "application/json"},
+                timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
             return True

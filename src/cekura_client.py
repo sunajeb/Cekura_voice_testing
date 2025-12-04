@@ -11,6 +11,9 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+# Request timeout in seconds (30 seconds for API calls)
+REQUEST_TIMEOUT = 30
+
 
 class CekuraClient:
     """Client for interacting with Cekura Test Framework API"""
@@ -20,12 +23,13 @@ class CekuraClient:
         self.base_url = "https://api.cekura.ai/test_framework/v1"
         self.headers = {"X-CEKURA-API-KEY": self.api_key}
 
-    def get_latest_result(self, agent_id: int) -> Optional[Dict[str, Any]]:
+    def get_latest_result(self, agent_id: int, expected_run_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
-        Fetch the latest result for a given agent.
+        Fetch the latest result for a given agent, optionally filtering by run name.
 
         Args:
             agent_id: The agent ID to fetch results for
+            expected_run_name: Optional run name to match (e.g., "API_Dec 4")
 
         Returns:
             Latest result dict or None if no results found
@@ -34,7 +38,8 @@ class CekuraClient:
             response = requests.get(
                 f"{self.base_url}/results/",
                 headers=self.headers,
-                params={"agent": agent_id}
+                params={"agent": agent_id},
+                timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
 
@@ -52,8 +57,22 @@ class CekuraClient:
                 logger.warning(f"No results found for agent {agent_id} after filtering")
                 return None
 
-            # Get the most recent result
-            latest = agent_results[0]
+            # If expected_run_name is provided, try to find matching result first
+            if expected_run_name:
+                matching_results = [
+                    r for r in agent_results
+                    if r.get("name") == expected_run_name
+                ]
+                if matching_results:
+                    latest = matching_results[0]
+                    logger.info(f"Found result matching run name '{expected_run_name}' for agent {agent_id}")
+                else:
+                    logger.warning(f"No result matching run name '{expected_run_name}' for agent {agent_id}, using latest")
+                    latest = agent_results[0]
+            else:
+                # Get the most recent result
+                latest = agent_results[0]
+
             result_id = latest["id"]
 
             # Fetch full details including overall_evaluation
@@ -76,7 +95,8 @@ class CekuraClient:
         try:
             response = requests.get(
                 f"{self.base_url}/results/{result_id}/",
-                headers=self.headers
+                headers=self.headers,
+                timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
             return response.json()
@@ -101,7 +121,8 @@ class CekuraClient:
             response = requests.get(
                 f"{self.base_url}/results/",
                 headers=self.headers,
-                params={"agent": agent_id}
+                params={"agent": agent_id},
+                timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
 
@@ -167,7 +188,8 @@ class CekuraClient:
             response = requests.post(
                 f"{self.base_url}/scenarios/run_scenarios/",
                 headers={**self.headers, "Content-Type": "application/json"},
-                json=payload
+                json=payload,
+                timeout=REQUEST_TIMEOUT
             )
             response.raise_for_status()
 

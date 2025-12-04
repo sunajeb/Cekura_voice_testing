@@ -106,6 +106,7 @@ class DataProcessor:
             "Link": f"[Link]({result_link})",
             "Latency (ms)": DataProcessor.format_value(metrics.get("latency")),
             "AI interrupting user": DataProcessor.format_value(metrics.get("ai_interrupting_user")),
+            "User interrupting AI": DataProcessor.format_value(metrics.get("user_interrupting_ai")),
             "Detect Silence in Conversation": DataProcessor.format_value(
                 metrics.get("detect_silence"), "percentage"
             ),
