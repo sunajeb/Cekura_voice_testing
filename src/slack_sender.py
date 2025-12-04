@@ -157,18 +157,19 @@ class SlackSender:
         # Get full agent names
         agent_names = [row[0] for row in agents_data]
 
-        # Calculate column width (enough for longest agent name)
-        max_agent_len = max(len(name) for name in agent_names)
-        col_width = max(15, max_agent_len + 2)  # At least 15 chars
-        metric_width = 30
+        # Fixed column width for Slack's narrow display
+        col_width = 12  # Compact width for Slack blocks
+        metric_width = 20
 
         # Build header row
         header = f"{'Metric':<{metric_width}}"
         for name in agent_names:
-            header += f" │ {name:^{col_width}}"
+            # Truncate long names to fit
+            display_name = name if len(name) <= col_width else name[:col_width-3] + "..."
+            header += f" │ {display_name:^{col_width}}"
 
         # Build separator
-        separator = "─" * metric_width + "─┼" + ("─" * (col_width + 2) + "┼") * (len(agent_names) - 1) + "─" * (col_width + 2)
+        separator = "─" * metric_width + ("─┼" + "─" * col_width) * len(agent_names)
 
         lines = [header, separator]
 
@@ -179,8 +180,8 @@ class SlackSender:
 
             # Truncate long metric names
             display_name = f"{emoji} {metric_name}"
-            if len(display_name) > metric_width:
-                display_name = display_name[:metric_width-3] + "..."
+            if len(display_name) > metric_width - 1:
+                display_name = display_name[:metric_width-4] + "..."
 
             # Identify best performer for this metric
             best_idx = self._find_best_performer(agents_data, metric_idx, metric_name)
@@ -194,10 +195,10 @@ class SlackSender:
                 if idx == best_idx:
                     display_value = f"⭐ {value}"
                 else:
-                    display_value = value
+                    display_value = f"   {value}"  # 3 spaces to align with star
 
-                # Center align values
-                row += f" │ {display_value:^{col_width}}"
+                # Right align values for better number readability
+                row += f" │ {display_value:>{col_width}}"
 
             lines.append(row)
 
@@ -213,7 +214,7 @@ class SlackSender:
             metric_name: Name of the metric
 
         Returns:
-            Index of best performer, or -1 if all N/A
+            Index of best performer, or -1 if all N/A or tied
         """
         values = []
         indices = []
@@ -246,7 +247,14 @@ class SlackSender:
         else:
             best_value = max(values)
 
-        # Find index of best value
+        # Count how many values match the best value
+        best_count = sum(1 for v in values if v == best_value)
+
+        # If tied (multiple with same best value), don't show star
+        if best_count > 1:
+            return -1
+
+        # Find index of single best value
         for i, v in enumerate(values):
             if v == best_value:
                 return indices[i]
