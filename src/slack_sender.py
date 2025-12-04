@@ -96,6 +96,13 @@ class SlackSender:
         table_blocks = self._markdown_table_to_slack_blocks(markdown_table)
         blocks.extend(table_blocks)
 
+        # Add divider
+        blocks.append({"type": "divider"})
+
+        # Add native fields version for better mobile rendering
+        fields_blocks = self._create_fields_blocks(markdown_table)
+        blocks.extend(fields_blocks)
+
         return {"blocks": blocks}
 
     def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
@@ -330,6 +337,89 @@ class SlackSender:
                 "text": "\n".join(chart_lines)
             }
         }
+
+    def _create_fields_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
+        """
+        Create Slack native field blocks for better mobile rendering.
+
+        Args:
+            markdown_table: Markdown formatted table
+
+        Returns:
+            List of Slack block dicts with fields
+        """
+        blocks = []
+        lines = markdown_table.strip().split("\n")
+
+        if len(lines) < 3:
+            return blocks
+
+        # Parse header and all data rows
+        header_line = lines[0]
+        headers = [h.strip() for h in header_line.split("|") if h.strip()]
+
+        # Parse all agent rows
+        agents_data = []
+        for i, line in enumerate(lines):
+            if i <= 1:  # Skip header and separator
+                continue
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            if len(cells) == len(headers):
+                agents_data.append(cells)
+
+        if not agents_data:
+            return blocks
+
+        # Get agent names (truncated for compact display)
+        agent_names = []
+        for row in agents_data:
+            name = row[0]
+            # Extract company name only (before " - ")
+            if " - " in name:
+                company = name.split(" - ")[0]
+            else:
+                company = name
+            # Truncate to 8 chars for compact display
+            agent_names.append(company[:8])
+
+        # Add section header
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*📊 Metrics Comparison*"
+            }
+        })
+
+        # Create a section for each metric (skip Company-Client and Link columns)
+        for metric_idx in range(2, len(headers)):
+            metric_name = headers[metric_idx]
+            emoji = self._get_metric_emoji(metric_name)
+
+            # Find best performer
+            best_idx = self._find_best_performer(agents_data, metric_idx, metric_name)
+
+            # Build metric line
+            metric_values = []
+            for idx, agent_row in enumerate(agents_data):
+                value = agent_row[metric_idx]
+                if idx == best_idx:
+                    metric_values.append(f"{agent_names[idx]}: ⭐ *{value}*")
+                else:
+                    metric_values.append(f"{agent_names[idx]}: {value}")
+
+            # Create section with metric name and values
+            metric_text = f"{emoji} *{metric_name}*\n" + "  |  ".join(metric_values)
+
+            blocks.append({
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": metric_text
+                }
+            })
+
+        return blocks
 
     def _get_metric_emoji(self, metric_name: str) -> str:
         """Get emoji for metric visualization."""
