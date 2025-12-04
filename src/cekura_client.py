@@ -39,15 +39,25 @@ class CekuraClient:
             response.raise_for_status()
 
             data = response.json()
-            if data.get("results") and len(data["results"]) > 0:
-                latest = data["results"][0]
-                result_id = latest["id"]
+            results = data.get("results", [])
 
-                # Fetch full details including overall_evaluation
-                return self.get_result_by_id(result_id)
+            if not results:
+                logger.warning(f"No results found for agent {agent_id}")
+                return None
 
-            logger.warning(f"No results found for agent {agent_id}")
-            return None
+            # Filter results to only include this agent (API filter doesn't always work)
+            agent_results = [r for r in results if r.get("agent") == agent_id]
+
+            if not agent_results:
+                logger.warning(f"No results found for agent {agent_id} after filtering")
+                return None
+
+            # Get the most recent result
+            latest = agent_results[0]
+            result_id = latest["id"]
+
+            # Fetch full details including overall_evaluation
+            return self.get_result_by_id(result_id)
 
         except Exception as e:
             logger.error(f"Error fetching latest result for agent {agent_id}: {e}")
