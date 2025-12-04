@@ -103,6 +103,13 @@ class SlackSender:
         fields_blocks = self._create_fields_blocks(markdown_table)
         blocks.extend(fields_blocks)
 
+        # Add divider
+        blocks.append({"type": "divider"})
+
+        # Add Block Kit section fields format
+        blockkit_blocks = self._create_blockkit_fields(markdown_table)
+        blocks.extend(blockkit_blocks)
+
         return {"blocks": blocks}
 
     def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
@@ -417,6 +424,95 @@ class SlackSender:
                     "type": "mrkdwn",
                     "text": metric_text
                 }
+            })
+
+        return blocks
+
+    def _create_blockkit_fields(self, markdown_table: str) -> List[Dict[str, Any]]:
+        """
+        Create Block Kit section fields for native Slack table feel.
+
+        Args:
+            markdown_table: Markdown formatted table
+
+        Returns:
+            List of Slack block dicts with fields
+        """
+        blocks = []
+        lines = markdown_table.strip().split("\n")
+
+        if len(lines) < 3:
+            return blocks
+
+        # Parse header and all data rows
+        header_line = lines[0]
+        headers = [h.strip() for h in header_line.split("|") if h.strip()]
+
+        # Parse all agent rows
+        agents_data = []
+        for i, line in enumerate(lines):
+            if i <= 1:  # Skip header and separator
+                continue
+            cells = [c.strip() for c in line.split("|") if c.strip()]
+            if len(cells) == len(headers):
+                agents_data.append(cells)
+
+        if not agents_data:
+            return blocks
+
+        # Get agent names (company only, truncated)
+        agent_names = []
+        for row in agents_data:
+            name = row[0]
+            if " - " in name:
+                company = name.split(" - ")[0]
+            else:
+                company = name
+            agent_names.append(company[:10])  # Truncate to 10 chars
+
+        # Add section header
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*📋 Block Kit Format*"
+            }
+        })
+
+        # Create fields for each metric (2 fields per row max for readability)
+        # We'll do: Metric name + values on one row
+        for metric_idx in range(2, len(headers)):
+            metric_name = headers[metric_idx]
+            emoji = self._get_metric_emoji(metric_name)
+
+            # Find best performer
+            best_idx = self._find_best_performer(agents_data, metric_idx, metric_name)
+
+            # Build metric header field
+            fields = [
+                {
+                    "type": "mrkdwn",
+                    "text": f"*{emoji} {metric_name}*"
+                }
+            ]
+
+            # Build values field
+            values_text = ""
+            for idx, agent_row in enumerate(agents_data):
+                value = agent_row[metric_idx]
+                if idx == best_idx:
+                    values_text += f"*{agent_names[idx]}*: ⭐ *{value}*\n"
+                else:
+                    values_text += f"{agent_names[idx]}: {value}\n"
+
+            fields.append({
+                "type": "mrkdwn",
+                "text": values_text.strip()
+            })
+
+            blocks.append({
+                "type": "section",
+                "fields": fields
             })
 
         return blocks
