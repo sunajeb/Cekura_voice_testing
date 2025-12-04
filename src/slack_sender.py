@@ -100,7 +100,7 @@ class SlackSender:
 
     def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
         """
-        Convert markdown table to proper table format with visual charts.
+        Convert markdown table to clean table format with best performer highlights.
 
         Args:
             markdown_table: Markdown formatted table
@@ -120,7 +120,6 @@ class SlackSender:
 
         # Parse all agent rows
         agents_data = []
-        agent_links = []
         for i, line in enumerate(lines):
             if i <= 1:  # Skip header and separator
                 continue
@@ -128,19 +127,11 @@ class SlackSender:
             if len(cells) == len(headers):
                 agents_data.append(cells)
 
-                # Extract link
-                link_cell = cells[1]
-                if link_cell.startswith("[") and "](" in link_cell:
-                    url = link_cell[link_cell.find("(")+1:link_cell.find(")")]
-                    agent_links.append(url)
-                else:
-                    agent_links.append(None)
-
         if not agents_data:
             return blocks
 
-        # Create ASCII table
-        table_text = self._create_ascii_table(headers, agents_data, agent_links)
+        # Create clean ASCII table with best performer highlights
+        table_text = self._create_clean_table(headers, agents_data)
 
         blocks.append({
             "type": "section",
@@ -150,53 +141,31 @@ class SlackSender:
             }
         })
 
-        # Add visual charts for key metrics
-        blocks.append({"type": "divider"})
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "*📊 Visual Comparison (Key Metrics)*"
-            }
-        })
-
-        # Select key metrics to visualize
-        key_metrics = ["Latency (ms)", "AI interrupting user", "Voice Tone + Clarity", "Relevancy"]
-
-        for metric_name in key_metrics:
-            if metric_name in headers:
-                metric_idx = headers.index(metric_name)
-                chart_block = self._create_bar_chart(metric_name, agents_data, metric_idx)
-                if chart_block:
-                    blocks.append(chart_block)
-
         return blocks
 
-    def _create_ascii_table(self, headers: List[str], agents_data: List[List[str]], agent_links: List[str]) -> str:
+    def _create_clean_table(self, headers: List[str], agents_data: List[List[str]]) -> str:
         """
-        Create a properly formatted ASCII table.
+        Create a clean, well-aligned ASCII table with best performer highlights.
 
         Args:
             headers: Column headers
             agents_data: All agent data rows
-            agent_links: Links for each agent
 
         Returns:
-            ASCII table string
+            Clean ASCII table string
         """
-        # Get agent names (short version)
-        agent_names = [row[0].replace(" - ", "\n") for row in agents_data]
+        # Get full agent names
+        agent_names = [row[0] for row in agents_data]
 
-        # Calculate column widths
-        col_width = 12  # Fixed width for readability
-        metric_width = 25
+        # Calculate column width (enough for longest agent name)
+        max_agent_len = max(len(name) for name in agent_names)
+        col_width = max(15, max_agent_len + 2)  # At least 15 chars
+        metric_width = 30
 
         # Build header row
         header = f"{'Metric':<{metric_width}}"
         for name in agent_names:
-            # Use first part of name only
-            short_name = name.split("\n")[0]
-            header += f" │ {short_name:^{col_width}}"
+            header += f" │ {name:^{col_width}}"
 
         # Build separator
         separator = "─" * metric_width + "─┼" + ("─" * (col_width + 2) + "┼") * (len(agent_names) - 1) + "─" * (col_width + 2)
@@ -213,16 +182,76 @@ class SlackSender:
             if len(display_name) > metric_width:
                 display_name = display_name[:metric_width-3] + "..."
 
+            # Identify best performer for this metric
+            best_idx = self._find_best_performer(agents_data, metric_idx, metric_name)
+
             row = f"{display_name:<{metric_width}}"
 
-            for agent_row in agents_data:
+            for idx, agent_row in enumerate(agents_data):
                 value = agent_row[metric_idx]
+
+                # Add star to best performer
+                if idx == best_idx:
+                    display_value = f"⭐ {value}"
+                else:
+                    display_value = value
+
                 # Center align values
-                row += f" │ {value:^{col_width}}"
+                row += f" │ {display_value:^{col_width}}"
 
             lines.append(row)
 
         return "\n".join(lines)
+
+    def _find_best_performer(self, agents_data: List[List[str]], metric_idx: int, metric_name: str) -> int:
+        """
+        Find the index of the best performing agent for a metric.
+
+        Args:
+            agents_data: All agent data
+            metric_idx: Index of the metric
+            metric_name: Name of the metric
+
+        Returns:
+            Index of best performer, or -1 if all N/A
+        """
+        values = []
+        indices = []
+
+        # Extract numeric values
+        for idx, row in enumerate(agents_data):
+            value_str = row[metric_idx]
+            try:
+                # Remove percentage sign if present
+                if "%" in value_str:
+                    value = float(value_str.replace("%", ""))
+                else:
+                    value = float(value_str)
+                values.append(value)
+                indices.append(idx)
+            except:
+                # Skip N/A values
+                pass
+
+        if not values:
+            return -1  # All N/A
+
+        # Determine if lower is better or higher is better
+        lower_is_better = any(word in metric_name for word in [
+            "Latency", "Stop Time", "interrupting"
+        ])
+
+        if lower_is_better:
+            best_value = min(values)
+        else:
+            best_value = max(values)
+
+        # Find index of best value
+        for i, v in enumerate(values):
+            if v == best_value:
+                return indices[i]
+
+        return -1
 
     def _create_bar_chart(self, metric_name: str, agents_data: List[List[str]], metric_idx: int) -> Dict[str, Any]:
         """
