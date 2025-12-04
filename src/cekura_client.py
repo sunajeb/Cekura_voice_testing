@@ -22,8 +22,6 @@ class CekuraClient:
         self.api_key = api_key
         self.base_url = "https://api.cekura.ai/test_framework/v1"
         self.headers = {"X-CEKURA-API-KEY": self.api_key}
-        # V1 API for shareable links
-        self.v1_base_url = "https://api.cekura.ai/v1"
 
     def get_latest_result(self, agent_id: int, expected_run_name: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """
@@ -262,33 +260,26 @@ class CekuraClient:
             expire_at: Expiration timestamp (default: end of 2025)
 
         Returns:
-            Shareable URL or None if endpoint not available
+            Shareable URL or None if error
         """
         try:
             response = requests.post(
-                f"{self.v1_base_url}/results/{result_id}/create_shareable_link_token/",
+                f"{self.base_url}/results/{result_id}/create_shareable_link_token/",
                 headers={**self.headers, "Content-Type": "application/json"},
                 json={"expire_at": expire_at},
                 timeout=REQUEST_TIMEOUT
             )
-
-            # Check for 404 - endpoint doesn't exist
-            if response.status_code == 404:
-                logger.warning(f"Shareable link endpoint not available (404) for result {result_id}")
-                return None
-
             response.raise_for_status()
 
             data = response.json()
-            token = data.get("token")
+            # API returns the full shareable_link URL directly
+            shareable_url = data.get("shareable_link")
 
-            if token:
-                # Construct shareable URL
-                shareable_url = f"https://app.cekura.ai/share/{token}"
+            if shareable_url:
                 logger.info(f"Created shareable link for result {result_id}: {shareable_url}")
                 return shareable_url
             else:
-                logger.error(f"No token in response for result {result_id}")
+                logger.error(f"No shareable_link in response for result {result_id}")
                 return None
 
         except Exception as e:
