@@ -106,8 +106,8 @@ git push -u origin main
 
 In GitHub repository settings → Secrets and variables → Actions:
 
-- **CEKURA_API_KEY**: `a91e35ab1ca2b9b771f5fb83329635794a28e79cbb359e6a5c9dc9aa083c96b6`
-- **SLACK_WEBHOOK_URL**: (You'll provide this)
+- **CEKURA_API_KEY**: (Your Cekura API key)
+- **SLACK_WEBHOOK_URL**: (Your Slack webhook URL)
 
 ### 3. Test Manual Workflow Trigger
 
