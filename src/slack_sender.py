@@ -100,7 +100,7 @@ class SlackSender:
 
     def _markdown_table_to_slack_blocks(self, markdown_table: str) -> List[Dict[str, Any]]:
         """
-        Convert markdown table to comparison view with agents as columns.
+        Convert markdown table to proper table format with visual charts.
 
         Args:
             markdown_table: Markdown formatted table
@@ -120,6 +120,7 @@ class SlackSender:
 
         # Parse all agent rows
         agents_data = []
+        agent_links = []
         for i, line in enumerate(lines):
             if i <= 1:  # Skip header and separator
                 continue
@@ -127,66 +128,191 @@ class SlackSender:
             if len(cells) == len(headers):
                 agents_data.append(cells)
 
+                # Extract link
+                link_cell = cells[1]
+                if link_cell.startswith("[") and "](" in link_cell:
+                    url = link_cell[link_cell.find("(")+1:link_cell.find(")")]
+                    agent_links.append(url)
+                else:
+                    agent_links.append(None)
+
         if not agents_data:
             return blocks
 
-        # Create agent header row with links
-        agent_names = []
-        for row in agents_data:
-            agent_name = row[0]  # Company-Client
-            link_cell = row[1]  # Link
-
-            if link_cell.startswith("[") and "](" in link_cell:
-                url = link_cell[link_cell.find("(")+1:link_cell.find(")")]
-                agent_names.append(f"<{url}|*{agent_name}*>")
+        # Add clickable agent links first
+        link_parts = []
+        for row, url in zip(agents_data, agent_links):
+            agent_name = row[0]
+            if url:
+                link_parts.append(f"<{url}|{agent_name}>")
             else:
-                agent_names.append(f"*{agent_name}*")
+                link_parts.append(agent_name)
 
-        # Add agent names header
         blocks.append({
             "type": "section",
             "text": {
                 "type": "mrkdwn",
-                "text": " | ".join(agent_names)
+                "text": "*📊 Agent Reports:* " + " • ".join(link_parts)
             }
         })
         blocks.append({"type": "divider"})
 
-        # Now display each metric as a row with values from all agents
-        # Skip Company-Client (0) and Link (1)
+        # Create ASCII table
+        table_text = self._create_ascii_table(headers, agents_data, agent_links)
+
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": f"```\n{table_text}\n```"
+            }
+        })
+
+        # Add visual charts for key metrics
+        blocks.append({"type": "divider"})
+        blocks.append({
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "*📊 Visual Comparison (Key Metrics)*"
+            }
+        })
+
+        # Select key metrics to visualize
+        key_metrics = ["Latency (ms)", "AI interrupting user", "Voice Tone + Clarity", "Relevancy"]
+
+        for metric_name in key_metrics:
+            if metric_name in headers:
+                metric_idx = headers.index(metric_name)
+                chart_block = self._create_bar_chart(metric_name, agents_data, metric_idx)
+                if chart_block:
+                    blocks.append(chart_block)
+
+        return blocks
+
+    def _create_ascii_table(self, headers: List[str], agents_data: List[List[str]], agent_links: List[str]) -> str:
+        """
+        Create a properly formatted ASCII table.
+
+        Args:
+            headers: Column headers
+            agents_data: All agent data rows
+            agent_links: Links for each agent
+
+        Returns:
+            ASCII table string
+        """
+        # Get agent names (short version)
+        agent_names = [row[0].replace(" - ", "\n") for row in agents_data]
+
+        # Calculate column widths
+        col_width = 12  # Fixed width for readability
+        metric_width = 25
+
+        # Build header row
+        header = f"{'Metric':<{metric_width}}"
+        for name in agent_names:
+            # Use first part of name only
+            short_name = name.split("\n")[0]
+            header += f" │ {short_name:^{col_width}}"
+
+        # Build separator
+        separator = "─" * metric_width + "─┼" + ("─" * (col_width + 2) + "┼") * (len(agent_names) - 1) + "─" * (col_width + 2)
+
+        lines = [header, separator]
+
+        # Build data rows (skip Company-Client and Link columns)
         for metric_idx in range(2, len(headers)):
             metric_name = headers[metric_idx]
             emoji = self._get_metric_emoji(metric_name)
 
-            # Collect values for this metric from all agents
-            fields = []
+            # Truncate long metric names
+            display_name = f"{emoji} {metric_name}"
+            if len(display_name) > metric_width:
+                display_name = display_name[:metric_width-3] + "..."
 
-            # Add metric name as first field (spans both columns)
-            blocks.append({
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"{emoji} *{metric_name}*"
-                }
-            })
+            row = f"{display_name:<{metric_width}}"
 
-            # Add values in a grid
-            for row in agents_data:
-                value = row[metric_idx]
-                agent_name_short = row[0].split(" - ")[0]  # Get company name only
+            for agent_row in agents_data:
+                value = agent_row[metric_idx]
+                # Center align values
+                row += f" │ {value:^{col_width}}"
 
-                fields.append({
-                    "type": "mrkdwn",
-                    "text": f"*{agent_name_short}:* `{value}`"
-                })
+            lines.append(row)
 
-            # Add fields in groups (Slack supports max 10 fields)
-            blocks.append({
-                "type": "section",
-                "fields": fields
-            })
+        return "\n".join(lines)
 
-        return blocks
+    def _create_bar_chart(self, metric_name: str, agents_data: List[List[str]], metric_idx: int) -> Dict[str, Any]:
+        """
+        Create a unicode bar chart for a metric.
+
+        Args:
+            metric_name: Name of the metric
+            agents_data: All agent data
+            metric_idx: Index of this metric in the data
+
+        Returns:
+            Slack block with bar chart
+        """
+        emoji = self._get_metric_emoji(metric_name)
+
+        # Extract values
+        values = []
+        agent_names = []
+        for row in agents_data:
+            agent_name = row[0].split(" - ")[0]  # Company name only
+            value_str = row[metric_idx]
+
+            # Try to convert to float
+            try:
+                # Remove percentage sign if present
+                if "%" in value_str:
+                    value = float(value_str.replace("%", ""))
+                else:
+                    value = float(value_str)
+                values.append(value)
+                agent_names.append(agent_name)
+            except:
+                # Skip N/A values
+                pass
+
+        if not values:
+            return None
+
+        # Normalize values to bar length (max 20 chars)
+        max_value = max(values)
+        min_value = min(values)
+
+        if max_value == min_value:
+            # All values are the same
+            bars = ["█" * 10 for _ in values]
+        else:
+            bars = []
+            for v in values:
+                # Scale to 1-20 range
+                scaled = int(((v - min_value) / (max_value - min_value)) * 18) + 2
+                bars.append("█" * scaled)
+
+        # Build chart text
+        chart_lines = [f"*{emoji} {metric_name}*"]
+        for name, value, bar in zip(agent_names, values, bars):
+            # Determine color based on metric (lower is better for latency, higher is better for percentages)
+            if "Latency" in metric_name or "Stop Time" in metric_name or "interrupting" in metric_name:
+                # Lower is better - use green for lowest
+                color = "🟢" if value == min_value else "🟡" if value < (min_value + max_value) / 2 else "🔴"
+            else:
+                # Higher is better - use green for highest
+                color = "🟢" if value == max_value else "🟡" if value > (min_value + max_value) / 2 else "🔴"
+
+            chart_lines.append(f"{color} {name:15} {bar} `{value}`")
+
+        return {
+            "type": "section",
+            "text": {
+                "type": "mrkdwn",
+                "text": "\n".join(chart_lines)
+            }
+        }
 
     def _get_metric_emoji(self, metric_name: str) -> str:
         """Get emoji for metric visualization."""
