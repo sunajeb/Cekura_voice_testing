@@ -1,0 +1,66 @@
+agents:
+- name: Nurix - Artium
+  agent_id: 9860
+  scenarios:
+  - 71175
+  - 71176
+  - 71177
+  - 71178
+  - 71181
+  - 71188
+  - 71189
+  - 71192
+  - 71196
+  - 71197
+- name: Sierra - SiriusXM
+  agent_id: 10141
+  scenarios:
+  - 72708
+  - 72709
+  - 72710
+  - 72711
+  - 72712
+  - 72713
+  - 72714
+  - 72715
+  - 72716
+  - 72717
+- name: Poly - SimplyHealth
+  agent_id: 10143
+  scenarios:
+  - 72721
+  - 72722
+  - 72723
+  - 72724
+  - 72725
+  - 72726
+  - 72727
+  - 72728
+  - 72729
+  - 72730
+- name: Poly - Howard Brown Health
+  agent_id: 10144
+  scenarios:
+  - 72731
+  - 72732
+  - 72733
+  - 72734
+  - 72735
+  - 72736
+  - 72737
+  - 72738
+  - 72739
+  - 72740
+- name: Sierra - WeightWatchers
+  agent_id: 10146
+  scenarios:
+  - 72741
+  - 72742
+  - 72743
+  - 72744
+  - 72745
+  - 72746
+  - 72747
+  - 72748
+  - 72749
+  - 72750
