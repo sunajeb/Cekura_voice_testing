@@ -262,7 +262,7 @@ class CekuraClient:
             expire_at: Expiration timestamp (default: end of 2025)
 
         Returns:
-            Shareable URL or None if error
+            Shareable URL or None if endpoint not available
         """
         try:
             response = requests.post(
@@ -271,6 +271,12 @@ class CekuraClient:
                 json={"expire_at": expire_at},
                 timeout=REQUEST_TIMEOUT
             )
+
+            # Check for 404 - endpoint doesn't exist
+            if response.status_code == 404:
+                logger.warning(f"Shareable link endpoint not available (404) for result {result_id}")
+                return None
+
             response.raise_for_status()
 
             data = response.json()
@@ -286,5 +292,5 @@ class CekuraClient:
                 return None
 
         except Exception as e:
-            logger.error(f"Error creating shareable link for result {result_id}: {e}")
+            logger.warning(f"Could not create shareable link for result {result_id}: {e}")
             return None
