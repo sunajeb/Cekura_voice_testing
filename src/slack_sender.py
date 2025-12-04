@@ -139,24 +139,6 @@ class SlackSender:
         if not agents_data:
             return blocks
 
-        # Add clickable agent links first
-        link_parts = []
-        for row, url in zip(agents_data, agent_links):
-            agent_name = row[0]
-            if url:
-                link_parts.append(f"<{url}|{agent_name}>")
-            else:
-                link_parts.append(agent_name)
-
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "*📊 Agent Reports:* " + " • ".join(link_parts)
-            }
-        })
-        blocks.append({"type": "divider"})
-
         # Create ASCII table
         table_text = self._create_ascii_table(headers, agents_data, agent_links)
 
