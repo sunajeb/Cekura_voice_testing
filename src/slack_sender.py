@@ -92,20 +92,6 @@ class SlackSender:
                 }
             })
 
-        # Parse table and create formatted sections with clickable links
-        table_blocks = self._markdown_table_to_slack_blocks(markdown_table)
-        blocks.extend(table_blocks)
-
-        # Add divider
-        blocks.append({"type": "divider"})
-
-        # Add native fields version for better mobile rendering
-        fields_blocks = self._create_fields_blocks(markdown_table)
-        blocks.extend(fields_blocks)
-
-        # Add divider
-        blocks.append({"type": "divider"})
-
         # Add Block Kit section fields format
         blockkit_blocks = self._create_blockkit_fields(markdown_table)
         blocks.extend(blockkit_blocks)
@@ -460,24 +446,8 @@ class SlackSender:
         if not agents_data:
             return blocks
 
-        # Get agent names (company only, truncated)
-        agent_names = []
-        for row in agents_data:
-            name = row[0]
-            if " - " in name:
-                company = name.split(" - ")[0]
-            else:
-                company = name
-            agent_names.append(company[:10])  # Truncate to 10 chars
-
-        # Add section header
-        blocks.append({
-            "type": "section",
-            "text": {
-                "type": "mrkdwn",
-                "text": "*📋 Block Kit Format*"
-            }
-        })
+        # Get full agent names (Company - Client)
+        agent_names = [row[0] for row in agents_data]
 
         # Create fields for each metric (2 fields per row max for readability)
         # We'll do: Metric name + values on one row

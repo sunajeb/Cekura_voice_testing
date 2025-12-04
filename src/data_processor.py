@@ -168,9 +168,10 @@ class DataProcessor:
         completed = sum(1 for r in results if r[1] is not None)
         failed = total - completed
 
-        summary = f"**Test Results Summary**\n"
-        summary += f"- Total Agents: {total}\n"
-        summary += f"- Completed: {completed}\n"
-        summary += f"- Failed: {failed}\n"
+        # Simple completion status with checkmark
+        if failed == 0:
+            summary = f"✅ Completed: {completed}/{total}"
+        else:
+            summary = f"⚠️ Completed: {completed}/{total} ({failed} failed)"
 
         return summary
