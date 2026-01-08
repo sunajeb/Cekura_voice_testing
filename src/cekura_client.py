@@ -251,13 +251,13 @@ class CekuraClient:
         logger.warning(f"Timeout waiting for result {result_id}")
         return None
 
-    def create_shareable_link(self, result_id: int, expire_at: str = "2025-12-31T23:59:59Z") -> Optional[str]:
+    def create_shareable_link(self, result_id: int, expire_at: str = "2026-12-31T23:59:59Z") -> Optional[str]:
         """
         Create a shareable link for a result.
 
         Args:
             result_id: The result ID to create a link for
-            expire_at: Expiration timestamp (default: end of 2025)
+            expire_at: Expiration timestamp (default: end of 2026)
 
         Returns:
             Shareable URL or None if error
